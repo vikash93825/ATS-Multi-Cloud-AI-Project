@@ -5,6 +5,7 @@ import json
 import base64
 import google.generativeai as genai
 import re
+from datetime import datetime, timezone
 
 genai.configure(api_key=st.secrets.GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-2.5-flash')
@@ -61,24 +62,98 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+  /* Motion + micro-interactions (kept lightweight) */
+  @keyframes ats-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes ats-gradient-pan { 0% { transform: translateX(-8%); } 50% { transform: translateX(8%); } 100% { transform: translateX(-8%); } }
+  .block-container { animation: ats-fade-in 380ms ease-out; }
+
   .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
   [data-testid="stSidebar"] .block-container { padding-top: 1.25rem; }
+  .ats-hero {
+    border: 1px solid rgba(49, 51, 63, 0.12);
+    border-radius: 18px;
+    padding: 20px 20px 18px 20px;
+    margin: 0.35rem 0.35rem 0.75rem 0.35rem; /* top / right / bottom / left */
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden; /* keeps rounded corners crisp */
+    background: rgba(255, 255, 255, 0.02); /* subtle base behind gradient */
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  }
+  .ats-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(88, 101, 242, 0.14), rgba(16, 185, 129, 0.10));
+    opacity: 1;
+    pointer-events: none;
+    animation: ats-gradient-pan 7s ease-in-out infinite;
+  }
+  .ats-hero * { position: relative; z-index: 1; }
+  .ats-hero-title { font-size: 1.8rem; font-weight: 750; letter-spacing: -0.02em; line-height: 1.15; }
+  .ats-hero-subtitle { margin-top: 0.4rem; font-size: 0.98rem; opacity: 0.86; line-height: 1.35; }
+  .ats-hero-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
   .ats-card {
     border: 1px solid rgba(49, 51, 63, 0.12);
     border-radius: 14px;
     padding: 14px 16px;
     background: rgba(255, 255, 255, 0.5);
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
   }
+  .ats-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+    border-color: rgba(49, 51, 63, 0.18);
+  }
+  .ats-muted { opacity: 0.8; }
+
+  /* Nicer buttons */
+  div.stButton > button {
+    transition: transform 120ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    border-radius: 12px;
+  }
+  div.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14);
+  }
+  div.stButton > button:active { transform: translateY(0); }
+
+  /* Tabs: subtle emphasis */
+  button[data-baseweb="tab"] {
+    transition: color 120ms ease, background-color 120ms ease;
+    border-radius: 999px;
+  }
+
   @media (prefers-color-scheme: dark) {
+    .ats-hero {
+      border-color: rgba(250, 250, 250, 0.16);
+      background: rgba(0, 0, 0, 0.16);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    }
+    .ats-hero::before {
+      background: linear-gradient(135deg, rgba(88, 101, 242, 0.26), rgba(16, 185, 129, 0.18));
+    }
     .ats-card { background: rgba(30, 31, 35, 0.35); border-color: rgba(250, 250, 250, 0.12); }
+    .ats-card:hover { border-color: rgba(250, 250, 250, 0.18); box-shadow: 0 18px 34px rgba(0, 0, 0, 0.35); }
   }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-st.title("ATS Resume Scanner")
-st.caption("Upload a resume PDF, paste a job description, then run an ATS-style analysis powered by Gemini.")
+st.markdown(
+    """
+<div class="ats-hero">
+  <div class="ats-hero-row">
+    <div>
+      <div class="ats-hero-title">ATS Resume Scanner</div>
+      <div class="ats-hero-subtitle">Upload a resume PDF, paste a job description, then run an ATS-style analysis powered by Gemini.</div>
+    </div>
+  </div>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
 if 'resume' not in st.session_state:
     st.session_state.resume = None
@@ -86,9 +161,22 @@ if 'resume' not in st.session_state:
 if "job_description" not in st.session_state:
     st.session_state.job_description = ""
 
+if "review_result" not in st.session_state:
+    st.session_state.review_result = None
+if "keywords_result" not in st.session_state:
+    st.session_state.keywords_result = None
+if "match_result" not in st.session_state:
+    st.session_state.match_result = None
+if "last_run" not in st.session_state:
+    st.session_state.last_run = None
+
 with st.sidebar:
-    st.subheader("Inputs")
-    uploaded_file = st.file_uploader("Resume (PDF)", type=["pdf"])
+    st.subheader("Resume")
+    uploaded_file = st.file_uploader(
+        "Resume PDF",
+        type=["pdf"],
+        help="We only use the first page image for analysis (current implementation).",
+    )
     if uploaded_file is not None:
         st.session_state.resume = uploaded_file
         st.success("Resume uploaded.")
@@ -96,27 +184,51 @@ with st.sidebar:
         st.info("Upload a PDF to enable analysis.")
 
     st.divider()
-    st.subheader("Actions")
-    run_review = st.button("Resume Review", use_container_width=True)
-    run_keywords = st.button("Extract Keywords", use_container_width=True)
-    run_match = st.button("Match Score", use_container_width=True)
+    st.subheader("Run")
+    run_review = st.button("Review", use_container_width=True, help="Strengths, gaps, and role fit.")
+    run_keywords = st.button("Keywords", use_container_width=True, help="Categorized skills from the job description.")
+    run_match = st.button("Match", use_container_width=True, help="Match % + missing keywords + final thoughts.")
+
+    cols = st.columns(2, gap="small")
+    with cols[0]:
+        clear_results = st.button("Clear results", use_container_width=True)
+    with cols[1]:
+        clear_jd = st.button("Clear JD", use_container_width=True)
+
+    if clear_results:
+        st.session_state.review_result = None
+        st.session_state.keywords_result = None
+        st.session_state.match_result = None
+        st.session_state.last_run = None
+
+    if clear_jd:
+        st.session_state.job_description = ""
+
+    st.divider()
+    st.caption("Tip: paste the full JD (requirements + responsibilities) for better signal.")
 
 left, right = st.columns([1.2, 1], gap="large")
 
 with left:
     st.subheader("Job Description")
     st.session_state.job_description = st.text_area(
-        "Paste the role description here",
+        "Paste job description",
         value=st.session_state.job_description,
         height=260,
-        placeholder="Responsibilities, requirements, skills, tools, etc.",
+        placeholder="Include requirements, responsibilities, skills, tools, seniority, domain keywords…",
+        help="This is treated as the source of truth for keyword extraction.",
     )
+    jd_words = len((st.session_state.job_description or "").split())
+
+    m1, m2 = st.columns(2, gap="medium")
+    m1.metric("JD words", jd_words)
+    m2.metric("Last run", st.session_state.last_run or "—")
 
 with right:
-    st.subheader("Resume Preview (first page)")
+    st.subheader("Resume Preview")
     st.markdown('<div class="ats-card">', unsafe_allow_html=True)
     if st.session_state.resume is None:
-        st.write("Upload a PDF to see a preview.")
+        st.write("Upload a PDF in the sidebar to see a preview here.")
     else:
         try:
             # Create a fresh preview without consuming the cached resume bytes
@@ -145,6 +257,8 @@ the job description. First the output should come as percentage and then keyword
 """
 
 st.divider()
+st.caption("Run an analysis from the sidebar. Results stay available while you switch tabs.")
+
 tabs = st.tabs(["Resume review", "Keywords", "Match score"])
 
 def _validate_inputs() -> tuple[bool, str]:
@@ -165,11 +279,15 @@ with tabs[0]:
             with st.spinner("Analyzing resume vs job description…"):
                 pdf_content = input_pdf_setup(st.session_state.resume)
                 response = get_gemini_response(input_prompt1, pdf_content, st.session_state.job_description)
-            st.markdown('<div class="ats-card">', unsafe_allow_html=True)
-            st.write(response)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.session_state.review_result = response
+            st.session_state.last_run = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            st.toast("Resume review ready.", icon="✅")
+    if st.session_state.review_result:
+        st.markdown('<div class="ats-card">', unsafe_allow_html=True)
+        st.write(st.session_state.review_result)
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
-        st.caption("Click **Resume Review** in the sidebar to run this analysis.")
+        st.caption("Click **Generate Resume Review** in the sidebar to run this analysis.")
 
 with tabs[1]:
     st.subheader("Keyword Extraction")
@@ -185,26 +303,31 @@ with tabs[1]:
                 except Exception as e:
                     response = None
                     st.error(f"Could not parse keywords JSON: {e}")
-
             if response:
-                c1, c2, c3 = st.columns(3, gap="medium")
-                with c1:
-                    st.markdown('<div class="ats-card">', unsafe_allow_html=True)
-                    st.markdown("**Technical Skills**")
-                    st.write(response.get("Technical Skills", []))
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with c2:
-                    st.markdown('<div class="ats-card">', unsafe_allow_html=True)
-                    st.markdown("**Analytical Skills**")
-                    st.write(response.get("Analytical Skills", []))
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with c3:
-                    st.markdown('<div class="ats-card">', unsafe_allow_html=True)
-                    st.markdown("**Soft Skills**")
-                    st.write(response.get("Soft Skills", []))
-                    st.markdown("</div>", unsafe_allow_html=True)
+                st.session_state.keywords_result = response
+                st.session_state.last_run = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                st.toast("Keywords extracted.", icon="✅")
+
+    if st.session_state.keywords_result:
+        response = st.session_state.keywords_result
+        c1, c2, c3 = st.columns(3, gap="medium")
+        with c1:
+            st.markdown('<div class="ats-card">', unsafe_allow_html=True)
+            st.markdown("**Technical Skills**")
+            st.write(response.get("Technical Skills", []))
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c2:
+            st.markdown('<div class="ats-card">', unsafe_allow_html=True)
+            st.markdown("**Analytical Skills**")
+            st.write(response.get("Analytical Skills", []))
+            st.markdown("</div>", unsafe_allow_html=True)
+        with c3:
+            st.markdown('<div class="ats-card">', unsafe_allow_html=True)
+            st.markdown("**Soft Skills**")
+            st.write(response.get("Soft Skills", []))
+            st.markdown("</div>", unsafe_allow_html=True)
     else:
-        st.caption("Click **Extract Keywords** in the sidebar to run this analysis.")
+        st.caption("Click **Extract Skills & Keywords** in the sidebar to run this analysis.")
 
 with tabs[2]:
     st.subheader("Match Score")
@@ -216,8 +339,13 @@ with tabs[2]:
             with st.spinner("Computing match score…"):
                 pdf_content = input_pdf_setup(st.session_state.resume)
                 response = get_gemini_response(input_prompt3, pdf_content, st.session_state.job_description)
-            st.markdown('<div class="ats-card">', unsafe_allow_html=True)
-            st.write(response)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.session_state.match_result = response
+            st.session_state.last_run = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            st.toast("Match score ready.", icon="✅")
+
+    if st.session_state.match_result:
+        st.markdown('<div class="ats-card">', unsafe_allow_html=True)
+        st.write(st.session_state.match_result)
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
-        st.caption("Click **Match Score** in the sidebar to run this analysis.")
+        st.caption("Click **Compute Match Score** in the sidebar to run this analysis.")
