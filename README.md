@@ -110,7 +110,7 @@ pdftoppm -v
 # Part 3 — Clone Repository
 
 ```bash
-git clone https://github.com/CloudDevOpsHub/Application-Tracking-System.git
+git clone https://github.com/vikash93825/ATS-Multi-Cloud-AI-Project.git
 
 cd Application-Tracking-System
 ```
