@@ -112,7 +112,7 @@ pdftoppm -v
 ```bash
 git clone https://github.com/vikash93825/ATS-Multi-Cloud-AI-Project.git
 
-cd Application-Tracking-System
+cd ATS-Multi-Cloud-AI-Project
 ```
 
 ---
