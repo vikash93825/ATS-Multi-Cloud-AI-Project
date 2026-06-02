@@ -1,40 +1,302 @@
-# ATS Resume Scanner
+# ATS Resume Scanner (AWS + GCP + Gemini AI)
 
-This is a Streamlit web application for an Applicant Tracking System (ATS) Resume Scanner. It allows users to upload a PDF resume and a job description, and then provides various analyses based on the uploaded documents.
+AI-powered ATS Resume Scanner built using **Streamlit + Python + Google Gemini + AWS EC2**.
 
-## Features
+Users can:
+- Upload Resume PDF
+- Paste Job Description (JD)
+- Get ATS Match Score
+- Resume Review
+- Keyword Analysis
 
-- **Upload PDF Resume**: Users can upload their resume in PDF format.
-- **Input Job Description**: Users can input the job description in a text area.
-- **Tell Me About the Resume**: Provides an evaluation of the candidate's profile against the job description, highlighting strengths and weaknesses.
-- **Get Keywords**: Identifies specific skills and keywords necessary for the resume to have maximum impact, provided in JSON format.
-- **Percentage Match**: Evaluates the percentage match of the resume with the job description, along with keywords missing and final thoughts.
+---
 
-## Installation
+# Architecture
 
-1. Clone the repository:
-
+```text
+User
+ ↓
+Streamlit UI
+ ↓
+Resume PDF Processing
+(pdf2image)
+ ↓
+Google Gemini AI
+ ↓
+ATS Review + Match Score
 ```
-git clone https://github.com/vikash93825/ATS-Multi-Cloud-AI-Project.git
+
+---
+
+# Prerequisites
+
+- AWS Account
+- Ubuntu EC2 Instance
+- Python 3.7+
+- Google Gemini API Key
+
+---
+
+# Part 1 — Launch AWS EC2 Instance
+
+Create:
+
+- Ubuntu Server 20.04 LTS
+- Open Port:
+  - 22 (SSH)
+  - 8501 (Streamlit)
+
+Connect:
+
+```bash
+ssh -i your-key.pem ubuntu@YOUR_PUBLIC_IP
 ```
 
-Install the required dependencies:
+Switch root:
+
+```bash
+sudo -i
 ```
+
+---
+
+# Part 2 — Install Dependencies
+
+Update:
+
+```bash
+apt update && apt upgrade -y
+```
+
+Install Python:
+
+```bash
+apt install python3 python3-pip python3-venv -y
+```
+
+Verify:
+
+```bash
+python3 --version
+pip3 --version
+```
+
+Install Git:
+
+```bash
+apt install git -y
+```
+
+Verify:
+
+```bash
+git --version
+```
+
+Install Poppler:
+
+```bash
+apt install poppler-utils -y
+```
+
+Verify:
+
+```bash
+pdftoppm -v
+```
+
+---
+
+# Part 3 — Clone Repository
+
+```bash
+git clone https://github.com/CloudDevOpsHub/Application-Tracking-System.git
+
+cd Application-Tracking-System
+```
+
+---
+
+# Part 4 — Create Virtual Environment
+
+Create:
+
+```bash
+python3 -m venv venv
+```
+
+Activate:
+
+```bash
+source venv/bin/activate
+```
+
+Expected:
+
+```bash
+(venv)
+```
+
+---
+
+# Part 5 — Install Packages
+
+Upgrade pip:
+
+```bash
+pip install --upgrade pip
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
-Run the Streamlit app:
-```
-streamlit run app.py
+
+Install Gemini SDK:
+
+```bash
+pip install google-generativeai
 ```
 
-## Usage
-Open the Streamlit app in your browser.
-Input the job description in the text area provided.
-Upload the PDF resume using the "Upload your resume(PDF)..." button.
-Click on the desired action buttons to perform various analyses.
+---
 
-## Technologies Used
-- Python
-- Streamlit
-- pdf2image
-- Google Gemini
+# Part 6 — Configure Gemini API
+
+## Generate API Key
+
+### Google AI Studio
+
+1. Open Google AI Studio
+2. Create Project
+3. API Keys
+4. Create API Key
+
+Copy key.
+
+---
+
+# Part 7 — Configure Streamlit Secrets
+
+Create folder:
+
+```bash
+mkdir -p .streamlit
+```
+
+Open:
+
+```bash
+vi .streamlit/secrets.toml
+```
+
+Add:
+
+```toml
+GOOGLE_API_KEY="YOUR_API_KEY"
+```
+
+Save:
+
+```text
+ESC
+:wq
+```
+
+---
+
+# Part 8 — Run Application
+
+Start:
+
+```bash
+streamlit run app.py \
+--server.port 8501 \
+--server.enableCORS false
+```
+
+Output:
+
+```text
+Local URL:
+http://localhost:8501
+
+Network URL:
+http://PUBLIC_IP:8501
+```
+
+Open:
+
+```text
+http://YOUR_PUBLIC_IP:8501
+```
+
+---
+
+# Project Structure
+
+```text
+Application-Tracking-System/
+│
+├── app.py
+├── requirements.txt
+├── README.md
+├── .streamlit/
+│    └── secrets.toml
+│
+├── uploads/
+├── assets/
+├── utils/
+└── venv/
+```
+
+---
+
+# Features
+
+✅ Resume Upload  
+✅ ATS Analysis  
+✅ Gemini Integration  
+✅ Match Score  
+✅ Resume Review  
+✅ Keywords Analysis  
+✅ AWS Deployment  
+
+---
+
+# Troubleshooting
+
+## Port issue
+
+```bash
+sudo ufw allow 8501
+sudo ufw reload
+```
+
+---
+
+## Missing poppler
+
+```bash
+sudo apt install poppler-utils
+```
+
+---
+
+## Verify Gemini Key
+
+```bash
+cat .streamlit/secrets.toml
+```
+
+Expected:
+
+```toml
+GOOGLE_API_KEY="YOUR_KEY"
+```
+
+---
+
+# Author
+
+Vikash Kumar
