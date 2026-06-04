@@ -236,7 +236,7 @@ http://YOUR_PUBLIC_IP:8501
 # Project Structure
 
 ```text
-Application-Tracking-System/
+ATS-Multi-Cloud-AI-Project/
 │
 ├── app.py
 ├── requirements.txt
